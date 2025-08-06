@@ -9,3 +9,4 @@ const Color kPrimaryColor = Color.fromRGBO(0, 104, 55, 1);
 const Color kAddItemButtonColor = Color.fromRGBO(56, 154, 72, 0.3);
 const Color kPrimaryButtonTextColor = Colors.white;
 const Color kCardBackgroundColor = Color.fromRGBO(241, 241, 241, 1);
+const Color kTreatmentCardColor = Color.fromRGBO(240, 240, 240, 1);
