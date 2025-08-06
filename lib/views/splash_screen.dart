@@ -1,3 +1,4 @@
+import 'package:ayur_care/utilities/constants.dart';
 import 'package:ayur_care/views/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -47,6 +48,10 @@ class _SplashScreenState extends State<SplashScreen> {
         height: double.infinity,
         decoration: const BoxDecoration(
           image: DecorationImage(
+            colorFilter: ColorFilter.mode(
+              kAddItemButtonColor,
+              BlendMode.darken,
+            ),
             image: AssetImage('assets/splash_screen.png'),
             fit: BoxFit.cover,
           ),
