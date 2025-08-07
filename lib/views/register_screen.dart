@@ -23,6 +23,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       provider.fetchBranches();
       provider.fetchTreatments();
     });
+
+    // Add listeners to amount controllers for dynamic calculation
+    discountAmountController.addListener(_calculateAmounts);
+    advanceAmountController.addListener(_calculateAmounts);
   }
 
   final _formKey = GlobalKey<FormState>();
@@ -42,7 +46,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
-  List<Treatment> treatments = [];
+  List<LocalTreatment> treatments = []; // Changed to LocalTreatment
 
   final Map<String, List<String>> keralaBranches = {
     'Thiruvananthapuram': [
@@ -132,6 +136,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> loadCustomFont() async {
     final fontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
     robotoFont = pw.Font.ttf(fontData);
+  }
+
+  // Function to calculate total, discount, advance, and balance amounts
+  void _calculateAmounts() {
+    double calculatedTotalAmount = 0;
+    for (var t in treatments) {
+      calculatedTotalAmount += (t.maleCount + t.femaleCount) * t.price;
+    }
+
+    double discount = double.tryParse(discountAmountController.text) ?? 0;
+    double advance = double.tryParse(advanceAmountController.text) ?? 0;
+
+    double finalTotal = calculatedTotalAmount - discount;
+    double balance = finalTotal - advance;
+
+    setState(() {
+      totalAmountController.text = calculatedTotalAmount.toStringAsFixed(0);
+      balanceAmountController.text = balance.toStringAsFixed(0);
+    });
   }
 
   Future<void> _generatePDF(
@@ -330,12 +353,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ...treatments.map((treatment) {
                           int totalCount =
                               treatment.maleCount + treatment.femaleCount;
-                          double treatmentTotal = 230.0 * totalCount;
+                          double treatmentTotal = treatment.price * totalCount;
 
                           return pw.TableRow(
                             children: [
                               _buildTableCell(treatment.name),
-                              pw.Row(children: [_buildTableCell('₹230')]),
+                              pw.Row(
+                                children: [
+                                  _buildTableCell(
+                                    '₹${treatment.price.toStringAsFixed(0)}',
+                                  ),
+                                ],
+                              ),
                               _buildTableCell(treatment.maleCount.toString()),
                               _buildTableCell(treatment.femaleCount.toString()),
                               _buildTableCell(
@@ -385,6 +414,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               'Balance: ₹${balanceAmount.toStringAsFixed(0)}',
                               style: pw.TextStyle(
                                 fontSize: 14,
+                                font: robotoFont,
                                 fontWeight: pw.FontWeight.bold,
                               ),
                             ),
@@ -397,51 +427,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   pw.SizedBox(height: 20),
 
                   // Thank you message and signature
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  // Thank you message and signature
+                  pw.SizedBox(height: 30),
+
+                  pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.end,
                     children: [
-                      pw.Text(
-                        'Thank you for choosing us',
-                        style: pw.TextStyle(
-                          fontSize: 18,
-                          fontWeight: pw.FontWeight.bold,
-                          color: const PdfColor.fromInt(0xFF4CAF50),
-                        ),
-                        textAlign: pw.TextAlign.center,
-                      ),
-
-                      pw.SizedBox(height: 10),
-
-                      pw.Text(
-                        'Your well-being is our commitment, and we\'re honored\nyou\'ve entrusted us with your health journey',
-                        style: pw.TextStyle(
-                          fontSize: 12,
-                          color: PdfColors.grey600,
-                        ),
-                        textAlign: pw.TextAlign.center,
-                      ),
-
-                      pw.SizedBox(height: 30),
-
-                      // Signature
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.end,
-                        children: [pw.Image(signature, width: 100, height: 50)],
-                      ),
-
-                      pw.SizedBox(height: 20),
-
-                      // Footer note
-                      pw.Text(
-                        '"Booking amount is non-refundable, and it\'s important to arrive on the allotted time for your treatment"',
-                        style: pw.TextStyle(
-                          fontSize: 10,
-                          color: PdfColors.grey600,
-                        ),
-                        textAlign: pw.TextAlign.center,
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text(
+                            'Thank you for choosing us',
+                            style: pw.TextStyle(
+                              fontSize: 18,
+                              fontWeight: pw.FontWeight.bold,
+                              color: const PdfColor.fromInt(0xFF4CAF50),
+                            ),
+                          ),
+                          pw.SizedBox(height: 10),
+                          pw.Text(
+                            'Your well-being is our commitment, and we\'re honored\nyou\'ve entrusted us with your health journey',
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              color: PdfColors.grey600,
+                            ),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                          pw.SizedBox(height: 30),
+                          pw.Image(signature, width: 100, height: 50),
+                        ],
                       ),
                     ],
+                  ),
+
+                  pw.Spacer(),
+
+                  pw.Center(
+                    child: pw.Text(
+                      '"Booking amount is non-refundable, and it\'s important to arrive on the allotted time for your treatment"',
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
                   ),
                 ],
               ),
@@ -504,7 +533,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       padding: const pw.EdgeInsets.all(8),
       child: pw.Text(
         text,
-        style: pw.TextStyle(fontSize: 11, font: robotoFont, color: PdfColors.grey700),
+        style: pw.TextStyle(
+          fontSize: 11,
+          font: robotoFont,
+          color: PdfColors.grey700,
+        ),
         textAlign: pw.TextAlign.center,
       ),
     );
@@ -524,6 +557,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             amount,
             style: pw.TextStyle(
               fontSize: 12,
+              font: robotoFont,
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.grey800,
             ),
@@ -645,15 +679,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 'Total Amount',
                 '',
                 totalAmountController,
+                readOnly: true, // Make total amount read-only
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter total amount';
+                  if (value == null ||
+                      value.isEmpty ||
+                      double.tryParse(value) == 0) {
+                    return 'Total amount cannot be zero. Add treatments.';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 20),
-              _buildTextField('Discount Amount', '', discountAmountController),
+              _buildTextField(
+                'Discount Amount',
+                '',
+                discountAmountController,
+                keyboardType: TextInputType.number,
+              ),
               const SizedBox(height: 20),
               _buildPaymentOptions(),
               const SizedBox(height: 20),
@@ -661,6 +703,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 'Advance Amount',
                 '',
                 advanceAmountController,
+                keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Please enter advance amount';
@@ -673,9 +716,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 'Balance Amount',
                 '',
                 balanceAmountController,
+                readOnly: true, // Make balance amount read-only
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter balance amount';
+                    return 'Balance amount cannot be empty';
                   }
                   return null;
                 },
@@ -697,7 +741,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     String label,
     String hint,
     TextEditingController controller, {
-    String? Function(String?)? validator, // Add this parameter
+    String? Function(String?)? validator,
+    bool readOnly = false,
+    TextInputType keyboardType = TextInputType.text,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,7 +764,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           child: TextFormField(
             controller: controller,
-            validator: validator, // Add this line
+            validator: validator,
+            readOnly: readOnly,
+            keyboardType: keyboardType,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: const TextStyle(
@@ -812,7 +860,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         if (treatments.isNotEmpty)
           ...treatments.asMap().entries.map((entry) {
             int index = entry.key;
-            Treatment treatment = entry.value;
+            LocalTreatment treatment = entry.value;
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
@@ -839,6 +887,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         onTap: () {
                           setState(() {
                             treatments.removeAt(index);
+                            _calculateAmounts(); // Recalculate after removing
                           });
                         },
                         child: Container(
@@ -964,7 +1013,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _showAddTreatmentDialog() {
-    String? selectedTreatment;
+    int? selectedTreatmentId;
     int maleCount = 0;
     int femaleCount = 0;
 
@@ -984,12 +1033,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   Consumer<AyurProvider>(
                     builder: (context, provider, _) {
-                      return _buildDropdown(
-                        'Treatment',
-                        'Choose preferred treatment',
-                        selectedTreatment,
-                        provider.treatments.map((t) => t.name ?? '').toList(),
-                        (value) => setState(() => selectedTreatment = value),
+                      return Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F1F1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButtonFormField<int>(
+                          isExpanded: true,
+                          value: selectedTreatmentId,
+                          decoration: InputDecoration(
+                            hintText: 'Choose preferred treatment',
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Color(0xFF666666),
+                          ),
+                          items: provider.treatments
+                              .map(
+                                (t) => DropdownMenuItem<int>(
+                                  value: t.id,
+                                  child: Text(
+                                    '${t.name ?? ''} (₹${t.price ?? '0'})',
+                                  ), // Display price
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (int? newValue) {
+                            setState(() => selectedTreatmentId = newValue);
+                          },
+                        ),
                       );
                     },
                   ),
@@ -998,7 +1076,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        width: 100,
+                        width: 90,
                         height: 50,
                         alignment: Alignment.centerLeft,
                         decoration: BoxDecoration(
@@ -1054,7 +1132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        width: 100,
+                        width: 90,
                         height: 50,
                         alignment: Alignment.centerLeft,
                         decoration: BoxDecoration(
@@ -1117,16 +1195,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                if (selectedTreatment != null) {
+                if (selectedTreatmentId != null) {
+                  final selectedTreatment = context
+                      .read<AyurProvider>()
+                      .treatments
+                      .firstWhere((t) => t.id == selectedTreatmentId);
+
                   setState(() {
                     treatments.add(
-                      Treatment(
-                        id: treatments.length + 1,
-                        name: selectedTreatment!,
+                      LocalTreatment(
+                        id: selectedTreatment.id!,
+                        name: selectedTreatment.name!,
                         maleCount: maleCount,
                         femaleCount: femaleCount,
+                        price:
+                            double.tryParse(selectedTreatment.price ?? '0') ??
+                            0, // Parse price
                       ),
                     );
+                    _calculateAmounts(); // Recalculate after adding
                   });
                   Navigator.pop(context);
                 }
@@ -1145,8 +1232,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _showEditTreatmentDialog(int index, Treatment treatment) {
-    String? selectedTreatment = treatment.name;
+  void _showEditTreatmentDialog(int index, LocalTreatment treatment) {
+    int? selectedTreatmentId = treatment.id;
     int maleCount = treatment.maleCount;
     int femaleCount = treatment.femaleCount;
 
@@ -1154,6 +1241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -1165,12 +1253,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   Consumer<AyurProvider>(
                     builder: (context, provider, _) {
-                      return _buildDropdown(
-                        'Treatment',
-                        'Choose preferred treatment',
-                        selectedTreatment,
-                        provider.treatments.map((t) => t.name ?? '').toList(),
-                        (value) => setState(() => selectedTreatment = value),
+                      return Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F1F1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButtonFormField<int>(
+                          isExpanded: true,
+                          value:
+                              provider.treatments.any(
+                                (t) => t.id == selectedTreatmentId,
+                              )
+                              ? selectedTreatmentId
+                              : null,
+                          decoration: InputDecoration(
+                            hintText: 'Choose preferred treatment',
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Color(0xFF666666),
+                          ),
+                          items: provider.treatments
+                              .map(
+                                (t) => DropdownMenuItem<int>(
+                                  value: t.id,
+                                  child: Text(
+                                    '${t.name ?? ''} (₹${t.price ?? '0'})',
+                                  ), // Display price
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (int? newValue) {
+                            setState(() => selectedTreatmentId = newValue);
+                          },
+                        ),
                       );
                     },
                   ),
@@ -1178,7 +1300,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Male"),
+                      Container(
+                        width: 90,
+                        height: 50,
+                        alignment: Alignment.centerLeft,
+                        decoration: BoxDecoration(
+                          color: kTreatmentCardColor,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.grey),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: const Text("Male"),
+                      ),
                       Row(
                         children: [
                           IconButton(
@@ -1188,25 +1324,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             icon: const Icon(
                               Icons.remove_circle,
-                              color: Colors.green,
+                              color: kPrimaryColor,
+                              size: 40,
                             ),
                           ),
-                          Text(maleCount.toString()),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Text(maleCount.toString()),
+                          ),
                           IconButton(
                             onPressed: () => setState(() => maleCount++),
                             icon: const Icon(
                               Icons.add_circle,
-                              color: Colors.green,
+                              color: kPrimaryColor,
+                              size: 40,
                             ),
                           ),
                         ],
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Female"),
+                      Container(
+                        width: 90,
+                        height: 50,
+                        alignment: Alignment.centerLeft,
+                        decoration: BoxDecoration(
+                          color: kTreatmentCardColor,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.grey),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: const Text("Female"),
+                      ),
                       Row(
                         children: [
                           IconButton(
@@ -1217,15 +1381,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             icon: const Icon(
                               Icons.remove_circle,
-                              color: Colors.green,
+                              color: kPrimaryColor,
+                              size: 40,
                             ),
                           ),
-                          Text(femaleCount.toString()),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Text(femaleCount.toString()),
+                          ),
                           IconButton(
                             onPressed: () => setState(() => femaleCount++),
                             icon: const Icon(
                               Icons.add_circle,
-                              color: Colors.green,
+                              color: kPrimaryColor,
+                              size: 40,
                             ),
                           ),
                         ],
@@ -1243,14 +1420,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                if (selectedTreatment != null) {
+                if (selectedTreatmentId != null) {
+                  final selectedTreatment = context
+                      .read<AyurProvider>()
+                      .treatments
+                      .firstWhere((t) => t.id == selectedTreatmentId);
+
                   setState(() {
-                    treatments[index] = Treatment(
-                      id: treatment.id,
-                      name: selectedTreatment!,
+                    treatments[index] = LocalTreatment(
+                      id: selectedTreatmentId!,
+                      name: selectedTreatment.name!,
                       maleCount: maleCount,
                       femaleCount: femaleCount,
+                      price:
+                          double.tryParse(selectedTreatment.price ?? '0') ??
+                          0, // Parse price
                     );
+                    _calculateAmounts(); // Recalculate after updating
                   });
                   Navigator.pop(context);
                 }
@@ -1258,7 +1444,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0F6238),
               ),
-              child: const Text("Update"),
+              child: const Text(
+                "Update",
+                style: TextStyle(color: kPrimaryButtonTextColor, fontSize: 16),
+              ),
             ),
           ],
         );
@@ -1527,23 +1716,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
     whatsappController.dispose();
     addressController.dispose();
     totalAmountController.dispose();
+    discountAmountController.removeListener(
+      _calculateAmounts,
+    ); // Remove listener
     discountAmountController.dispose();
+    advanceAmountController.removeListener(
+      _calculateAmounts,
+    ); // Remove listener
     advanceAmountController.dispose();
     balanceAmountController.dispose();
     super.dispose();
   }
 }
 
-class Treatment {
+// Custom class to hold treatment details including price
+class LocalTreatment {
   final int id;
   String name;
   int maleCount;
   int femaleCount;
+  double price; // Added price field
 
-  Treatment({
+  LocalTreatment({
     required this.id,
     required this.name,
     required this.maleCount,
     required this.femaleCount,
+    required this.price,
   });
 }
