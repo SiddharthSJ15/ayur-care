@@ -4,6 +4,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:ayur_care/provider/ayur_provider.dart';
+import 'package:ayur_care/models/patient_model.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,32 +19,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _sortValue = 'Date';
 
-  final List<Map<String, String>> _bookings = [
-    {
-      "name": "Vikram Singh",
-      "package": "Couple Combo Package (Rejuven...",
-      "date": "31/01/2024",
-      "person": "Jithesh",
-    },
-    {
-      "name": "Vikram Singh",
-      "package": "Couple Combo Package (Rejuven...",
-      "date": "31/01/2024",
-      "person": "Jithesh",
-    },
-    {
-      "name": "Vikram Singh",
-      "package": "Couple Combo Package (Rejuven...",
-      "date": "31/01/2024",
-      "person": "Jithesh",
-    },
-    {
-      "name": "Vikram Singh",
-      "package": "Couple Combo Package (Rejuven...",
-      "date": "31/01/2024",
-      "person": "Jithesh",
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    // Fetch patients when the screen loads
+    Future.microtask(
+      () => Provider.of<AyurProvider>(context, listen: false).fetchPatients(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,9 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: Column(
           children: [
-            // Search Bar
             const SizedBox(height: 16),
-
             Row(
               children: [
                 Expanded(
@@ -125,8 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 24),
-
-            // Sort by dropdown
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -172,98 +154,117 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 20),
-
-            // Booking List
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.only(bottom: 60),
-
-                itemCount: _bookings.length,
-                itemBuilder: (context, index) {
-                  final booking = _bookings[index];
-                  return Card(
-                    color: kCardBackgroundColor,
-                    elevation: 0,
-                    margin: const EdgeInsets.only(bottom: 24),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${index + 1}. ${booking["name"]}',
-                            style: GoogleFonts.poppins(
-                              fontSize: kCardHeadingFontSize,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black,
+              child: Consumer<AyurProvider>(
+                builder: (context, provider, _) {
+                  if (provider.isLoading == true) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (provider.patients.isEmpty) {
+                    return const Center(child: Text('No patients found.'));
+                  }
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await provider.fetchPatients();
+                    },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 60),
+                      itemCount: provider.patients.length,
+                      itemBuilder: (context, index) {
+                        final PatientModel patient = provider.patients[index];
+                        return Card(
+                          color: kCardBackgroundColor,
+                          elevation: 0,
+                          margin: const EdgeInsets.only(bottom: 24),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${index + 1}. ${patient.name ?? "No Name"}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: kCardHeadingFontSize,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  patient.payment ?? "No Package",
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: kFormFieldFontSize,
+                                    color: kPrimaryColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.calendar_today,
+                                      size: 16,
+                                      color: Color(0xFFFF7A00),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      patient.dateNdTime != null
+                                          ? DateFormat('dd/MM/yyyy').format(
+                                              DateTime.parse(
+                                                patient.dateNdTime,
+                                              ),
+                                            )
+                                          : 'No Date',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Icon(
+                                      Icons.person,
+                                      size: 16,
+                                      color: Color(0xFFFF7A00),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      patient.user ?? "No User",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(height: 20, thickness: 1),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'View Booking details',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 16,
+                                      color: kPrimaryColor,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            booking["package"]!,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                              fontSize: kFormFieldFontSize,
-                              color: kPrimaryColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today,
-                                size: 16,
-                                color: Color(0xFFFF7A00),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                booking["date"]!,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              const Icon(
-                                Icons.person,
-                                size: 16,
-                                color: Color(0xFFFF7A00),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                booking["person"]!,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 20, thickness: 1),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'View Booking details',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: kPrimaryColor,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   );
                 },
@@ -285,7 +286,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(builder: (context) => RegisterScreen()),
               );
-              // Add your registration logic here
             },
             backgroundColor: kPrimaryColor,
             label: Text(

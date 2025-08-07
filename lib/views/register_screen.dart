@@ -1,6 +1,12 @@
 import 'package:ayur_care/utilities/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:ayur_care/provider/ayur_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:flutter/services.dart';
 
 class RegisterScreen extends StatefulWidget {
   @override
@@ -8,6 +14,17 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  @override
+  void initState() {
+    super.initState();
+    loadCustomFont();
+    Future.microtask(() {
+      final provider = Provider.of<AyurProvider>(context, listen: false);
+      provider.fetchBranches();
+      provider.fetchTreatments();
+    });
+  }
+
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController nameController = TextEditingController();
@@ -27,12 +44,501 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   List<Treatment> treatments = [];
 
-  List<String> dummyTreatmentOptions = [
-    'Physiotherapy',
-    'Acupuncture',
-    'Chiropractic',
-    'Massage Therapy',
-  ];
+  final Map<String, List<String>> keralaBranches = {
+    'Thiruvananthapuram': [
+      'Neyyattinkara',
+      'Varkala',
+      'Attingal',
+      'Kazhakoottam',
+      'Poovar',
+    ],
+    'Kollam': [
+      'Punalur',
+      'Paravur',
+      'Karunagappally',
+      'Kottarakkara',
+      'Anchal',
+    ],
+    'Pathanamthitta': [
+      'Adoor',
+      'Thiruvalla',
+      'Ranni',
+      'Mallappally',
+      'Kozhencherry',
+    ],
+    'Alappuzha': [
+      'Cherthala',
+      'Kayamkulam',
+      'Mavelikkara',
+      'Haripad',
+      'Ambalapuzha',
+    ],
+    'Kottayam': [
+      'Changanassery',
+      'Pala',
+      'Ettumanoor',
+      'Vaikom',
+      'Mundakayam',
+      'Erattupetta',
+      'Kanjirappally',
+    ],
+    'Idukki': ['Thodupuzha', 'Munnar', 'Kumily', 'Kattappana', 'Painavu'],
+    'Ernakulam': [
+      'Aluva',
+      'Perumbavoor',
+      'Angamaly',
+      'Kothamangalam',
+      'Muvattupuzha',
+      'North Paravur',
+    ],
+    'Thrissur': [
+      'Chalakudy',
+      'Kodungallur',
+      'Irinjalakuda',
+      'Kunnamkulam',
+      'Guruvayur',
+    ],
+    'Palakkad': ['Ottappalam', 'Shoranur', 'Chittur', 'Pattambi', 'Mannarkkad'],
+    'Malappuram': [
+      'Tirur',
+      'Perinthalmanna',
+      'Ponnani',
+      'Nilambur',
+      'Kondotty',
+    ],
+    'Kozhikode': ['Vadakara', 'Koyilandy', 'Feroke', 'Ramanattukara', 'Mukkom'],
+    'Wayanad': [
+      'Kalpetta',
+      'Mananthavady',
+      'Sulthan Bathery',
+      'Meppadi',
+      'Panamaram',
+    ],
+    'Kannur': [
+      'Thalassery',
+      'Payyanur',
+      'Iritty',
+      'Mattannur',
+      'Koothuparamba',
+    ],
+    'Kasaragod': ['Kanhangad', 'Nileshwar', 'Uppala', 'Manjeshwar', 'Bekal'],
+  };
+
+  List<String> get availableLocations => keralaBranches.keys.toList();
+  List<String> get availableBranches =>
+      selectedLocation != null ? (keralaBranches[selectedLocation!] ?? []) : [];
+
+  late final pw.Font robotoFont;
+  Future<void> loadCustomFont() async {
+    final fontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+    robotoFont = pw.Font.ttf(fontData);
+  }
+
+  Future<void> _generatePDF(
+    DateTime treatmentDate,
+    TimeOfDay treatmentTime,
+  ) async {
+    final pdf = pw.Document();
+
+    // Load assets
+    final logoData = await rootBundle.load('assets/ayur_care.png');
+    final bgLogoData = await rootBundle.load('assets/ayur_care.png');
+    final signatureData = await rootBundle.load('assets/signature.png');
+
+    final logo = pw.MemoryImage(logoData.buffer.asUint8List());
+    final bgLogo = pw.MemoryImage(bgLogoData.buffer.asUint8List());
+    final signature = pw.MemoryImage(signatureData.buffer.asUint8List());
+
+    // Calculate totals
+    double totalAmount = double.tryParse(totalAmountController.text) ?? 0;
+    double discountAmount = double.tryParse(discountAmountController.text) ?? 0;
+    double advanceAmount = double.tryParse(advanceAmountController.text) ?? 0;
+    double balanceAmount = double.tryParse(balanceAmountController.text) ?? 0;
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return pw.Stack(
+            children: [
+              // Background logo (watermark)
+              pw.Positioned(
+                left: 150,
+                top: 200,
+                child: pw.Opacity(
+                  opacity: 0.1,
+                  child: pw.Image(bgLogo, width: 300, height: 300),
+                ),
+              ),
+
+              // Main content
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  // Header with logo and company info
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Image(logo, width: 80, height: 80),
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.end,
+                          children: [
+                            pw.Text(
+                              'KUMARAKOM',
+                              style: pw.TextStyle(
+                                fontSize: 18,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                            pw.SizedBox(height: 5),
+                            pw.Text(
+                              'Cheepunkal P.O. Kumarakom, kottayam, Kerala - 686563',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                              textAlign: pw.TextAlign.right,
+                            ),
+                            pw.SizedBox(height: 2),
+                            pw.Text(
+                              'e-mail: unknown@gmail.com',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                            pw.SizedBox(height: 2),
+                            pw.Text(
+                              'Mob: +91 9876543210 | +91 9876543210',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                            pw.SizedBox(height: 2),
+                            pw.Text(
+                              'GST No: 32AABCU9603R1ZW',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  pw.SizedBox(height: 30),
+
+                  // Patient Details Section
+                  pw.Text(
+                    'Patient Details',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                      color: const PdfColor.fromInt(0xFF4CAF50),
+                    ),
+                  ),
+
+                  pw.SizedBox(height: 15),
+
+                  // Patient info in two columns
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      // Left column
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _buildDetailRow('Name', nameController.text),
+                            pw.SizedBox(height: 8),
+                            _buildDetailRow('Address', addressController.text),
+                            pw.SizedBox(height: 8),
+                            _buildDetailRow(
+                              'WhatsApp Number',
+                              '+91 ${whatsappController.text}',
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      pw.SizedBox(width: 40),
+
+                      // Right column
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _buildDetailRow(
+                              'Booked On',
+                              '${DateTime.now().day.toString().padLeft(2, '0')}/${DateTime.now().month.toString().padLeft(2, '0')}/${DateTime.now().year} | ${_formatTimeOfDay(TimeOfDay.now())}',
+                            ),
+                            pw.SizedBox(height: 8),
+                            _buildDetailRow(
+                              'Treatment Date',
+                              '${treatmentDate.day.toString().padLeft(2, '0')}/${treatmentDate.month.toString().padLeft(2, '0')}/${treatmentDate.year}',
+                            ),
+                            pw.SizedBox(height: 8),
+                            _buildDetailRow(
+                              'Treatment Time',
+                              _formatTimeOfDay(treatmentTime),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  pw.SizedBox(height: 30),
+
+                  // Treatment Table
+                  pw.Container(
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.grey300),
+                      borderRadius: pw.BorderRadius.circular(5),
+                    ),
+                    child: pw.Table(
+                      border: pw.TableBorder.all(color: PdfColors.grey300),
+                      columnWidths: {
+                        0: const pw.FlexColumnWidth(3),
+                        1: const pw.FlexColumnWidth(1.5),
+                        2: const pw.FlexColumnWidth(1),
+                        3: const pw.FlexColumnWidth(1),
+                        4: const pw.FlexColumnWidth(1.5),
+                      },
+                      children: [
+                        // Header
+                        pw.TableRow(
+                          decoration: const pw.BoxDecoration(
+                            color: PdfColor.fromInt(0xFFF5F5F5),
+                          ),
+                          children: [
+                            _buildTableHeader('Treatment'),
+                            _buildTableHeader('Price'),
+                            _buildTableHeader('Male'),
+                            _buildTableHeader('Female'),
+                            _buildTableHeader('Total'),
+                          ],
+                        ),
+
+                        // Treatment rows
+                        ...treatments.map((treatment) {
+                          int totalCount =
+                              treatment.maleCount + treatment.femaleCount;
+                          double treatmentTotal = 230.0 * totalCount;
+
+                          return pw.TableRow(
+                            children: [
+                              _buildTableCell(treatment.name),
+                              pw.Row(children: [_buildTableCell('₹230')]),
+                              _buildTableCell(treatment.maleCount.toString()),
+                              _buildTableCell(treatment.femaleCount.toString()),
+                              _buildTableCell(
+                                '₹${treatmentTotal.toStringAsFixed(0)}',
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+
+                  pw.SizedBox(height: 20),
+
+                  // Amount Summary
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.end,
+                    children: [
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          _buildAmountRow(
+                            'Total Amount',
+                            '₹${totalAmount.toStringAsFixed(0)}',
+                          ),
+                          pw.SizedBox(height: 5),
+                          _buildAmountRow(
+                            'Discount',
+                            '₹${discountAmount.toStringAsFixed(0)}',
+                          ),
+                          pw.SizedBox(height: 5),
+                          _buildAmountRow(
+                            'Advance',
+                            '₹${advanceAmount.toStringAsFixed(0)}',
+                          ),
+                          pw.SizedBox(height: 10),
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 5,
+                            ),
+                            decoration: pw.BoxDecoration(
+                              border: pw.Border.all(color: PdfColors.grey400),
+                              borderRadius: pw.BorderRadius.circular(3),
+                            ),
+                            child: pw.Text(
+                              'Balance: ₹${balanceAmount.toStringAsFixed(0)}',
+                              style: pw.TextStyle(
+                                fontSize: 14,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  pw.SizedBox(height: 20),
+
+                  // Thank you message and signature
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    mainAxisAlignment: pw.MainAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Thank you for choosing us',
+                        style: pw.TextStyle(
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                          color: const PdfColor.fromInt(0xFF4CAF50),
+                        ),
+                        textAlign: pw.TextAlign.center,
+                      ),
+
+                      pw.SizedBox(height: 10),
+
+                      pw.Text(
+                        'Your well-being is our commitment, and we\'re honored\nyou\'ve entrusted us with your health journey',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          color: PdfColors.grey600,
+                        ),
+                        textAlign: pw.TextAlign.center,
+                      ),
+
+                      pw.SizedBox(height: 30),
+
+                      // Signature
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.end,
+                        children: [pw.Image(signature, width: 100, height: 50)],
+                      ),
+
+                      pw.SizedBox(height: 20),
+
+                      // Footer note
+                      pw.Text(
+                        '"Booking amount is non-refundable, and it\'s important to arrive on the allotted time for your treatment"',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          color: PdfColors.grey600,
+                        ),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    // Show PDF
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Patient_Registration_${nameController.text}',
+    );
+  }
+
+  // Helper methods for PDF
+  pw.Widget _buildDetailRow(String label, String value) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Container(
+          width: 80,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey800,
+            ),
+          ),
+        ),
+        pw.Expanded(
+          child: pw.Text(
+            value,
+            style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildTableHeader(String text) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(8),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: 12,
+          fontWeight: pw.FontWeight.bold,
+          color: const PdfColor.fromInt(0xFF4CAF50),
+        ),
+        textAlign: pw.TextAlign.center,
+      ),
+    );
+  }
+
+  pw.Widget _buildTableCell(String text) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(8),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontSize: 11, font: robotoFont, color: PdfColors.grey700),
+        textAlign: pw.TextAlign.center,
+      ),
+    );
+  }
+
+  pw.Widget _buildAmountRow(String label, String amount) {
+    return pw.Container(
+      width: 200,
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+          ),
+          pw.Text(
+            amount,
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'am' : 'pm';
+    return '$hour:$minute $period';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,47 +581,105 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTextField('Name', 'Enter your full name', nameController),
-              const SizedBox(height: 20),
+              _buildTextField(
+                'Name',
+                'Enter your full name',
+                nameController,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your name';
+                  }
+                  return null;
+                },
+              ),
+
               _buildTextField(
                 'Whatsapp Number',
                 'Enter your Whatsapp number',
                 whatsappController,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your WhatsApp number';
+                  }
+                  if (value.length != 10) {
+                    return 'Please enter a valid 10-digit number';
+                  }
+                  return null;
+                },
               ),
-              const SizedBox(height: 20),
+
               _buildTextField(
                 'Address',
                 'Enter your full address',
                 addressController,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your address';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 20),
               _buildDropdown(
                 'Location',
                 'Choose your location',
                 selectedLocation,
-                ['Kochi', 'Trivandrum', 'Calicut'],
-                (value) => setState(() => selectedLocation = value),
+                availableLocations,
+                (value) => setState(() {
+                  selectedLocation = value;
+                  selectedBranch = null;
+                }),
               ),
               const SizedBox(height: 20),
               _buildDropdown(
                 'Branch',
                 'Select the branch',
                 selectedBranch,
-                ['Main Branch', 'North Branch', 'South Branch'],
+                availableBranches,
                 (value) => setState(() => selectedBranch = value),
               ),
               const SizedBox(height: 20),
               _buildTreatmentsSection(),
               const SizedBox(height: 20),
-              _buildTextField('Total Amount', '', totalAmountController),
+              _buildTextField(
+                'Total Amount',
+                '',
+                totalAmountController,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter total amount';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 20),
               _buildTextField('Discount Amount', '', discountAmountController),
               const SizedBox(height: 20),
               _buildPaymentOptions(),
               const SizedBox(height: 20),
-              _buildTextField('Advance Amount', '', advanceAmountController),
+              _buildTextField(
+                'Advance Amount',
+                '',
+                advanceAmountController,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter advance amount';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 20),
-              _buildTextField('Balance Amount', '', balanceAmountController),
+              _buildTextField(
+                'Balance Amount',
+                '',
+                balanceAmountController,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter balance amount';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 20),
               _buildDateField(),
               const SizedBox(height: 20),
@@ -132,8 +696,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildTextField(
     String label,
     String hint,
-    TextEditingController controller,
-  ) {
+    TextEditingController controller, {
+    String? Function(String?)? validator, // Add this parameter
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -153,6 +718,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           child: TextFormField(
             controller: controller,
+            validator: validator, // Add this line
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: const TextStyle(
@@ -373,7 +939,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             );
           }),
-
         GestureDetector(
           onTap: _showAddTreatmentDialog,
           child: Container(
@@ -417,12 +982,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildDropdown(
-                    'Treatment',
-                    'Choose preferred treatment',
-                    selectedTreatment,
-                    dummyTreatmentOptions,
-                    (value) => setState(() => selectedTreatment = value),
+                  Consumer<AyurProvider>(
+                    builder: (context, provider, _) {
+                      return _buildDropdown(
+                        'Treatment',
+                        'Choose preferred treatment',
+                        selectedTreatment,
+                        provider.treatments.map((t) => t.name ?? '').toList(),
+                        (value) => setState(() => selectedTreatment = value),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -594,12 +1163,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildDropdown(
-                    'Treatment',
-                    'Choose preferred treatment',
-                    selectedTreatment,
-                    dummyTreatmentOptions,
-                    (value) => setState(() => selectedTreatment = value),
+                  Consumer<AyurProvider>(
+                    builder: (context, provider, _) {
+                      return _buildDropdown(
+                        'Treatment',
+                        'Choose preferred treatment',
+                        selectedTreatment,
+                        provider.treatments.map((t) => t.name ?? '').toList(),
+                        (value) => setState(() => selectedTreatment = value),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -813,7 +1386,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 return Theme(
                   data: Theme.of(context).copyWith(
                     colorScheme: const ColorScheme.light(
-                      primary: Color(0xFF0F6238), // Your app's primary color
+                      primary: Color(0xFF0F6238),
                       onPrimary: Colors.white,
                       onSurface: Color(0xFF333333),
                     ),
@@ -873,7 +1446,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: ElevatedButton(
         onPressed: () {
           if (_formKey.currentState!.validate()) {
-            _handleSave();
+            if (treatments.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please add at least one treatment'),
+                ),
+              );
+              return;
+            }
+            if (selectedDate == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please select a treatment date')),
+              );
+              return;
+            }
+            if (selectedTime == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please select a treatment time')),
+              );
+              return;
+            }
+            _handleSave(selectedDate!, selectedTime!);
           }
         },
         style: ElevatedButton.styleFrom(
@@ -895,12 +1488,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _handleSave() {
-    print('Name: ${nameController.text}');
-    print('WhatsApp: ${whatsappController.text}');
-    print('Treatments: ${treatments.length}');
-    if (selectedTime != null) {
-      print('Treatment Time: $selectedTime');
+  void _handleSave(DateTime treatmentDate, TimeOfDay treatmentTime) async {
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // Generate and show PDF
+      await _generatePDF(treatmentDate, treatmentTime);
+
+      // Hide loading
+      Navigator.pop(context);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration completed successfully!'),
+          backgroundColor: Color(0xFF4CAF50),
+        ),
+      );
+    } catch (e) {
+      // Hide loading
+      Navigator.pop(context);
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
     }
   }
 
